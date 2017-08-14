@@ -385,7 +385,9 @@ Raven.prototype = {
         // report on.
         try {
             var stack = TraceKit.computeStackTrace(ex);
-            this._handleStackInfo(stack, options);
+            this._handleStackInfo(stack, objectMerge({
+                originalException: ex
+            }, options));
         } catch(ex1) {
             if(ex !== ex1) {
                 throw ex1;
@@ -413,6 +415,7 @@ Raven.prototype = {
         options = options || {};
 
         var data = objectMerge({
+            originalMessage: msg,
             message: msg + ''  // Make sure it's actually a string
         }, options);
 
@@ -1345,6 +1348,9 @@ Raven.prototype = {
     },
 
     _trimPacket: function(data) {
+        delete data.originalException;
+        delete data.originalMessage;
+
         // For now, we only want to truncate the two different messages
         // but this could/should be expanded to just trim everything
         var max = this._globalOptions.maxMessageLength;
@@ -1545,7 +1551,7 @@ Raven.prototype = {
         if (globalOptions.serverName) data.server_name = globalOptions.serverName;
 
         if (isFunction(globalOptions.dataCallback)) {
-            data = globalOptions.dataCallback(data) || data;
+            data = globalOptions.dataCallback(data, data.originalMessage || data.originalException) || data;
         }
 
         // Why??????????
@@ -1554,9 +1560,12 @@ Raven.prototype = {
         }
 
         // Check if the request should be filtered or not
-        if (isFunction(globalOptions.shouldSendCallback) && !globalOptions.shouldSendCallback(data)) {
+        if (isFunction(globalOptions.shouldSendCallback) && !globalOptions.shouldSendCallback(data, data.originalMessage || data.originalException)) {
             return;
         }
+
+        delete data.originalException;
+        delete data.originalMessage;
 
         // Backoff state: Sentry server previously responded w/ an error (e.g. 429 - too many requests),
         // so drop requests until "cool-off" period has elapsed.
